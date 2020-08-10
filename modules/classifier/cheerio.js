@@ -1,32 +1,54 @@
-const axios = require('axios');
 const cheer = require('cheerio');
 const Iconv = require('iconv-lite');
+const request = require('request-promise');
 const charset = require('charset');
+const axios = require('axios');
+
+//* 해당 url의 charset을 받아오는 함수
+const getEnc = async (url) => {
+  try {
+    let enc = await axios.get(url, {
+      timeout: 5000,
+      maxRedirects: 10,
+    });
+    return charset(enc.headers, enc.data);
+  } catch (err) {
+    console.log('findCharset err');
+    console.log(err);
+    return null;
+  }
+};
 
 const cheerio = async (url) => {
   try {
-    //* 0. getIframeUrl 에러로 url이 ''로 왔을 경우
-    if (url === '') {
-      return '';
-    }
-    //* 1. axios로 url에 get 요첨을 보냄
+    //* 1. 해당 url에 요청을 보냄
     const getHtml = async () => {
-      const opt = {
-        method: 'get',
-        timeout: 2000,
-        maxRedirects: 5,
-        responseEncoding: 'binary',
-        responseType: 'arraybuffer',
-      };
-      return await axios.get(url, opt);
+      try {
+        const userAgent =
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:69.0) Gecko/20100101 Firefox/69.0';
+        return await request.get({
+          url: url,
+          timeout: 5000,
+          maxRedirects: 10,
+          encoding: null,
+          headers: {
+            'User-Agent': userAgent,
+          },
+        });
+      } catch (err) {
+        console.log('getHtml err');
+        console.log(err);
+        return '';
+      }
     };
     //* 2. getHtml 요청에서 html을 받음
     const text = await getHtml().then(async (htmlDoc) => {
       //* 2-1 innerText : html에서 텍스트를 저장하는배열
       let innerText = [];
       //* 2-2 decoding
-      const enc = charset(htmlDoc.headers, htmlDoc.data);
-      const decodedResult = Iconv.decode(htmlDoc.data, enc);
+      const convertBinary = Buffer.from(htmlDoc);
+      const enc = await getEnc(url);
+      const decodedResult = Iconv.decode(convertBinary, enc);
       const $ = cheer.load(decodedResult);
       //* 2-3 getText: body tag의 text 가져오기
       //! 분기 : naver Post 인지 판단
